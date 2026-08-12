@@ -1,0 +1,1082 @@
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  Trophy, Search, Lock, Users, Star, Plus, X, Check,
+  Shield, Medal, Save, LayoutDashboard, UserCircle2, Coins,
+  ChevronRight, ListOrdered, Trash2, AlertCircle, Loader2
+} from "lucide-react";
+
+/* ============================================================================
+   PREPARATORY BOYS CONFERENCE 2026 — FANTASY LEAGUE
+   Single-file React app. Data lives in shared window.storage so every
+   participant and the admin see the same live players / teams / settings.
+============================================================================ */
+
+/* ---------------------------- design tokens ---------------------------- */
+const STYLE = `
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root{
+  --navy-950:#050a15;
+  --navy-900:#0a1223;
+  --navy-800:#111c33;
+  --navy-700:#182643;
+  --navy-600:#223258;
+  --line:#26375c;
+  --gold:#e7b750;
+  --gold-light:#f6d789;
+  --blue:#4c8dff;
+  --blue-light:#8ab2ff;
+  --green:#33d17e;
+  --red:#ef5b5b;
+  --white:#f4f7fc;
+  --muted:#8ea0c4;
+  --muted-dim:#5f719a;
+}
+.fl-root{
+  font-family:'Inter',sans-serif;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(76,141,255,0.16), transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%, rgba(231,183,80,0.10), transparent 55%),
+    var(--navy-950);
+  color:var(--white);
+  min-height:100%;
+  width:100%;
+  box-sizing:border-box;
+  padding-bottom:56px;
+}
+.fl-root *{box-sizing:border-box;}
+.fl-display{font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:0.01em;}
+.fl-num{font-family:'Barlow Condensed',sans-serif; font-weight:700;}
+.fl-eyebrow{font-family:'Barlow Condensed',sans-serif; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; font-size:11px; color:var(--gold);}
+.fl-scrollbar::-webkit-scrollbar{height:6px; width:6px;}
+.fl-scrollbar::-webkit-scrollbar-thumb{background:var(--navy-600); border-radius:4px;}
+.fl-name{unicode-bidi:plaintext;}
+
+.fl-header{
+  position:sticky; top:0; z-index:40;
+  background:rgba(10,18,35,0.86);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.fl-crest{
+  width:42px; height:42px; border-radius:50%;
+  background:conic-gradient(from 220deg, var(--gold), var(--gold-light), var(--gold));
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 0 0 2px var(--navy-950), 0 0 0 3px var(--gold), 0 6px 16px rgba(231,183,80,0.25);
+  flex-shrink:0;
+}
+.fl-navbtn{
+  display:flex; align-items:center; gap:6px;
+  padding:8px 14px; border-radius:10px; font-size:14px; font-weight:600;
+  color:var(--muted); background:transparent; border:1px solid transparent;
+  cursor:pointer; transition:all .15s ease; white-space:nowrap;
+}
+.fl-navbtn:hover{color:var(--white); background:var(--navy-800);}
+.fl-navbtn.active{color:var(--navy-950); background:var(--gold); box-shadow:0 4px 14px rgba(231,183,80,0.3);}
+
+.fl-card{
+  background:linear-gradient(180deg, var(--navy-800), var(--navy-900));
+  border:1px solid var(--line);
+  border-radius:16px;
+}
+.fl-btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:10px 18px; border-radius:10px; font-weight:700; font-size:14px;
+  cursor:pointer; border:none; transition:transform .12s ease, box-shadow .12s ease;
+  font-family:'Inter',sans-serif;
+}
+.fl-btn:active{transform:scale(0.97);}
+.fl-btn-gold{background:linear-gradient(180deg,var(--gold-light),var(--gold)); color:#241a02; box-shadow:0 6px 16px rgba(231,183,80,0.28);}
+.fl-btn-gold:disabled{opacity:0.4; cursor:not-allowed; box-shadow:none;}
+.fl-btn-blue{background:linear-gradient(180deg,var(--blue-light),var(--blue)); color:#04122e; box-shadow:0 6px 16px rgba(76,141,255,0.28);}
+.fl-btn-ghost{background:var(--navy-700); color:var(--white); border:1px solid var(--line);}
+.fl-btn-danger{background:rgba(239,91,91,0.14); color:var(--red); border:1px solid rgba(239,91,91,0.35);}
+.fl-btn-sm{padding:6px 12px; font-size:12.5px; border-radius:8px;}
+
+.fl-input{
+  width:100%; background:var(--navy-900); border:1px solid var(--line); color:var(--white);
+  border-radius:10px; padding:10px 12px; font-size:14px; font-family:'Inter',sans-serif;
+  outline:none; transition:border-color .15s ease;
+}
+.fl-input:focus{border-color:var(--gold);}
+.fl-input::placeholder{color:var(--muted-dim);}
+.fl-label{font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:6px; display:block;}
+
+.fl-badge{display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:999px; font-size:11.5px; font-weight:700;}
+.fl-badge-gold{background:rgba(231,183,80,0.15); color:var(--gold-light); border:1px solid rgba(231,183,80,0.3);}
+.fl-badge-blue{background:rgba(76,141,255,0.15); color:var(--blue-light); border:1px solid rgba(76,141,255,0.3);}
+.fl-badge-green{background:rgba(51,209,126,0.15); color:var(--green); border:1px solid rgba(51,209,126,0.3);}
+.fl-badge-red{background:rgba(239,91,91,0.15); color:var(--red); border:1px solid rgba(239,91,91,0.3);}
+.fl-badge-muted{background:var(--navy-700); color:var(--muted);}
+
+/* player card — collectible "match card" signature element */
+.fl-pcard{
+  position:relative; border-radius:18px; overflow:hidden; cursor:pointer;
+  background:linear-gradient(160deg, var(--navy-700) 0%, var(--navy-900) 65%);
+  border:1px solid var(--line);
+  transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.fl-pcard:hover{transform:translateY(-3px); border-color:rgba(231,183,80,0.4); box-shadow:0 12px 28px rgba(0,0,0,0.35);}
+.fl-pcard.selected{border-color:var(--gold); box-shadow:0 0 0 2px var(--gold), 0 12px 24px rgba(231,183,80,0.2);}
+.fl-pcard.empty{opacity:0.5;}
+.fl-ribbon{
+  position:absolute; top:10px; right:-30px; transform:rotate(35deg);
+  background:linear-gradient(180deg,var(--gold-light),var(--gold)); color:#241a02;
+  font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:12px;
+  padding:2px 34px; box-shadow:0 3px 8px rgba(0,0,0,0.3);
+}
+.fl-avatar{
+  width:100%; aspect-ratio:1/1; border-radius:14px; display:flex; align-items:center; justify-content:center;
+  font-family:'Barlow Condensed',sans-serif; font-weight:700; color:#fff; overflow:hidden;
+  border:1px solid rgba(255,255,255,0.08);
+}
+.fl-check{
+  position:absolute; top:8px; left:8px; width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; background:var(--navy-900);
+  border:2px solid var(--muted-dim);
+}
+.fl-check.on{background:var(--gold); border-color:var(--gold); color:#241a02;}
+
+.fl-tabbar{display:flex; gap:6px; border-bottom:1px solid var(--line); overflow-x:auto;}
+.fl-tab{padding:10px 4px; margin-right:18px; font-size:14px; font-weight:700; color:var(--muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap;}
+.fl-tab.active{color:var(--gold); border-color:var(--gold);}
+
+.fl-table{width:100%; border-collapse:collapse; font-size:13.5px;}
+.fl-table th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line);}
+.fl-table td{padding:9px 10px; border-bottom:1px solid rgba(38,55,92,0.5); vertical-align:middle;}
+.fl-table tr:hover td{background:rgba(255,255,255,0.02);}
+
+.fl-podium-step{border-radius:14px 14px 0 0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:14px 8px;}
+
+@keyframes fl-rise{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
+.fl-rise{animation:fl-rise .4s ease both;}
+.fl-spin{animation:fl-spin 1s linear infinite;}
+@keyframes fl-spin{to{transform:rotate(360deg);}}
+`;
+
+/* --------------------------- default data ------------------------------ */
+const PLAYER_NAMES_87 = [
+"افرام هادى","انطوان اكرامي","ايفان جون سلامة","باتريك هاني فاروق","بافلي ايمن خليل",
+"بولا ايمن كمال","بولا عماد فؤاد","بولا هاني سمير","بيشوي اشرف ناصر","توني بيشوي جمال",
+"جيوفاني ايميل ابراهيم","جون ماجد ناجي","جوناثان جون جيد","دانيال ايهاب","رؤوف رامي",
+"ستيفن دميان","ستيفن مايكل","شوقي سامي","صموئيل سعد","فيلوباتير ميلاد",
+"كاراس القس كيرلس","كاراس نبيل وجية","كارلوس مكرم رجائي","كيرلس شفيق سامي","ماثيو حسني",
+"مارتن مراد","مارك رفعت","متأوس القس اسحق","مينا جوزيف","مينا عوض",
+"نادر نائل","يوسف اسعد","يوسف بيتر ماهر","يوسف نسيم","كيفين مينا",
+"يوسف بيشوى","توماس ثروت","شنودة اسحق","كيرلس سمير","كيفين شنودة",
+"اليكسندروس","كيرلس نبيل","رافائيل","كيفين ايمن","بيتر رومانى",
+"توماس رامى","يوسف بيتر","صموئيل","ديفيد ريمون","ديفيد ماجد",
+"امير عطيى","كرستيانو وائل","كاراس ابراهيم","يوسف اشرف","فيلوباتير سامى",
+"ابانوب جرجس","ايلي باسم","كيرلس جوزيف","امير هاني","كاراس ميلاد",
+"جوناثان عوني","دانيال كمال","مايكل هاني","ارساني بولس","مايكل ملاك",
+"جورج رامي","ماثيو اشرف","مارك مينا","كيرلس وليم","باتريك ريمون",
+"ارميا عاطف","كيرلس هاني","بيتر جورج","مارتينو وائل","ماير مسامح",
+"مارك مسامح","جاك اميل","اندرو مدحت","وديع ايهاب","بولا ميلاد",
+"توماس عطا","فليمون عماد","ابانوب مينا","توماس وائل","مينا سامي",
+"سمعان عيسي","بولا هاني"
+];
+
+const DEFAULT_CATEGORIES = [
+  { key: "memorization", label: "Memorization" },
+  { key: "games", label: "Games" },
+  { key: "attendance", label: "Attendance" },
+  { key: "additional", label: "Additional" },
+  { key: "penalties", label: "Penalties" },
+];
+
+const DEFAULT_SETTINGS = {
+  conferenceName: "Preparatory Boys Conference 2026",
+  leagueName: "Fantasy League",
+  targetPlayers: 100,
+  teamSize: 5,
+  initialPrice: 100,
+  pricingStep: 10,        // every N points...
+  pricingIncrement: 10,   // ...adds this much price
+  categories: DEFAULT_CATEGORIES,
+  adminPin: "2026",
+};
+
+function emptyPointsFor(categories) {
+  const p = {};
+  categories.forEach(c => { p[c.key] = 0; });
+  return p;
+}
+
+function buildDefaultPlayers(settings) {
+  const players = [];
+  for (let i = 0; i < settings.targetPlayers; i++) {
+    const name = PLAYER_NAMES_87[i] || "";
+    players.push({
+      id: i + 1,
+      name,
+      photo: null,
+      points: emptyPointsFor(settings.categories),
+      status: name ? "active" : "empty",
+      notes: "",
+    });
+  }
+  return players;
+}
+
+/* ------------------------------ helpers -------------------------------- */
+const AVATAR_HUES = [
+  ["#4c8dff", "#1c3a75"], ["#e7b750", "#7a5a17"], ["#33d17e", "#12522f"],
+  ["#ef5b5b", "#6b1f1f"], ["#a86cf0", "#402569"], ["#4fc4d6", "#164a52"],
+];
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+function getInitials(name) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  return parts.slice(0, 2).map(p => p[0]).join("");
+}
+function avatarGradient(name) {
+  const [a, b] = AVATAR_HUES[hashStr(name || "?") % AVATAR_HUES.length];
+  return `linear-gradient(150deg, ${a}, ${b})`;
+}
+function totalPoints(player, categories) {
+  return categories.reduce((sum, c) => sum + (Number(player.points?.[c.key]) || 0), 0);
+}
+function currentPrice(player, settings) {
+  const pts = totalPoints(player, settings.categories);
+  const steps = Math.floor(pts / settings.pricingStep);
+  return settings.initialPrice + steps * settings.pricingIncrement;
+}
+function slugify(s) {
+  return (s || "").trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+/* ------------------------------ storage --------------------------------- */
+async function storageGet(key, fallback) {
+  try {
+    const res = await window.storage.get(key, true);
+    if (res && res.value) return JSON.parse(res.value);
+    return fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+async function storageSet(key, value) {
+  try {
+    await window.storage.set(key, JSON.stringify(value), true);
+    return true;
+  } catch (e) {
+    console.error("storage set failed", key, e);
+    return false;
+  }
+}
+
+/* ------------------------------ Avatar ---------------------------------- */
+function Avatar({ name, photo, size }) {
+  const style = { background: photo ? undefined : avatarGradient(name) };
+  return (
+    <div className="fl-avatar" style={{ ...style, fontSize: size || "clamp(16px,4vw,26px)" }}>
+      {photo ? (
+        <img src={photo} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <span style={{ opacity: 0.92 }}>{getInitials(name)}</span>
+      )}
+    </div>
+  );
+}
+
+/* --------------------------- StatCard ------------------------------------ */
+function StatCard({ icon: Icon, label, value, accent }) {
+  return (
+    <div className="fl-card fl-rise" style={{ padding: "16px 18px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span className="fl-eyebrow">{label}</span>
+        <Icon size={16} color={accent || "var(--gold)"} />
+      </div>
+      <div className="fl-num" style={{ fontSize: 34, lineHeight: 1.1, marginTop: 4 }}>{value}</div>
+    </div>
+  );
+}
+
+/* --------------------------- PlayerCard ----------------------------------- */
+function PlayerCard({ player, settings, rank, selected, selectable, onClick }) {
+  const pts = totalPoints(player, settings.categories);
+  const price = currentPrice(player, settings);
+  const isEmpty = player.status === "empty" || !player.name;
+  return (
+    <div
+      className={`fl-pcard fl-rise ${selected ? "selected" : ""} ${isEmpty ? "empty" : ""}`}
+      onClick={!isEmpty ? onClick : undefined}
+      style={{ padding: 12, cursor: isEmpty ? "default" : "pointer" }}
+    >
+      {rank ? <div className="fl-ribbon">#{rank}</div> : null}
+      {selectable && !isEmpty ? (
+        <div className={`fl-check ${selected ? "on" : ""}`}>{selected ? <Check size={13} /> : null}</div>
+      ) : null}
+      <Avatar name={player.name || "Open Slot"} photo={player.photo} />
+      <div style={{ marginTop: 10 }}>
+        <div className="fl-name" style={{ fontWeight: 700, fontSize: 14.5, minHeight: 18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {player.name || "Open slot"}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+          <span className="fl-badge fl-badge-gold"><Coins size={11} />{isEmpty ? "—" : price}</span>
+          <span className="fl-badge fl-badge-blue"><Star size={11} />{isEmpty ? "—" : pts}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------- NavBar ----------------------------------- */
+function NavBar({ view, setView, settings }) {
+  const items = [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "players", label: "Players", icon: Users },
+    { id: "team", label: "My Team", icon: UserCircle2 },
+    { id: "leaderboard", label: "Leaderboard", icon: ListOrdered },
+    { id: "admin", label: "Admin", icon: Shield },
+  ];
+  return (
+    <div className="fl-header">
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "12px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+        <div className="fl-crest"><Trophy size={19} color="#241a02" /></div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="fl-display" style={{ fontSize: 19, lineHeight: 1 }}>{settings.leagueName}</div>
+          <div style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{settings.conferenceName}</div>
+        </div>
+        <div className="fl-scrollbar" style={{ display: "flex", gap: 4, overflowX: "auto" }}>
+          {items.map(it => (
+            <button key={it.id} className={`fl-navbtn ${view === it.id ? "active" : ""}`} onClick={() => setView(it.id)}>
+              <it.icon size={15} />{it.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------ Dashboard ---------------------------------- */
+function DashboardView({ players, teams, settings, setView }) {
+  const activePlayers = players.filter(p => p.status !== "empty" && p.name);
+  const emptySlots = players.length - activePlayers.length;
+  const totalPtsRecorded = players.reduce((s, p) => s + totalPoints(p, settings.categories), 0);
+
+  const rankedTeams = useMemo(() => {
+    return teams.map(t => ({
+      ...t,
+      pts: t.playerIds.reduce((s, id) => {
+        const pl = players.find(p => p.id === id);
+        return s + (pl ? totalPoints(pl, settings.categories) : 0);
+      }, 0),
+    })).sort((a, b) => b.pts - a.pts);
+  }, [teams, players, settings]);
+
+  const rankedPlayers = useMemo(() => {
+    return activePlayers.map(p => ({ ...p, pts: totalPoints(p, settings.categories) }))
+      .sort((a, b) => b.pts - a.pts);
+  }, [activePlayers, settings]);
+
+  const podium = rankedTeams.slice(0, 3);
+  const podiumOrder = podium.length === 3 ? [podium[1], podium[0], podium[2]] : podium;
+  const heights = [96, 128, 76];
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 18px" }}>
+      <div className="fl-rise" style={{ marginBottom: 22 }}>
+        <div className="fl-eyebrow">Live Standings</div>
+        <h1 className="fl-display" style={{ fontSize: 40, margin: "4px 0 6px" }}>{settings.conferenceName}</h1>
+        <div style={{ color: "var(--muted)", fontSize: 15 }}>{settings.leagueName} — pick five, chase the top of the table.</div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 12, marginBottom: 24 }}>
+        <StatCard icon={Users} label="Total Players" value={activePlayers.length} />
+        <StatCard icon={Plus} label="Empty Slots" value={emptySlots} accent="var(--blue)" />
+        <StatCard icon={Trophy} label="Fantasy Teams" value={teams.length} accent="var(--gold)" />
+        <StatCard icon={Star} label="Points Recorded" value={totalPtsRecorded} accent="var(--green)" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 16, alignItems: "start" }}>
+        <div className="fl-card fl-rise" style={{ padding: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div className="fl-display" style={{ fontSize: 20 }}>Top Fantasy Teams</div>
+            <button className="fl-btn fl-btn-ghost fl-btn-sm" onClick={() => setView("leaderboard")}>Full board <ChevronRight size={13} /></button>
+          </div>
+
+          {rankedTeams.length === 0 ? (
+            <EmptyState text="No fantasy teams yet. Be the first to build one." />
+          ) : (
+            <>
+              {podium.length >= 1 && (
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 18 }}>
+                  {podiumOrder.map((t, i) => {
+                    const place = podium.indexOf(t) + 1;
+                    const colors = ["#c7ccd6", "var(--gold)", "#c98a4e"];
+                    return (
+                      <div key={t.id} style={{ flex: 1, textAlign: "center" }}>
+                        <Avatar name={t.teamName || t.participantName} size={14} />
+                        <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} className="fl-name">{t.teamName}</div>
+                        <div style={{ fontSize: 11, color: "var(--muted)" }} className="fl-name">{t.participantName}</div>
+                        <div
+                          className="fl-podium-step"
+                          style={{ height: heights[i], background: `linear-gradient(180deg, ${colors[place - 1]}33, ${colors[place - 1]}11)`, border: `1px solid ${colors[place - 1]}55`, marginTop: 8 }}
+                        >
+                          <div className="fl-num" style={{ fontSize: 26, color: colors[place - 1] }}>#{place}</div>
+                          <div className="fl-num" style={{ fontSize: 15 }}>{t.pts} pts</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div>
+                {rankedTeams.slice(0, 10).map((t, i) => (
+                  <RowLine key={t.id} rank={i + 1} title={t.teamName} sub={t.participantName} value={`${t.pts} pts`} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="fl-card fl-rise" style={{ padding: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div className="fl-display" style={{ fontSize: 20 }}>Top Players</div>
+            <button className="fl-btn fl-btn-ghost fl-btn-sm" onClick={() => setView("players")}>Browse <ChevronRight size={13} /></button>
+          </div>
+          {rankedPlayers.length === 0 ? (
+            <EmptyState text="No points recorded yet." />
+          ) : (
+            rankedPlayers.slice(0, 10).map((p, i) => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid rgba(38,55,92,0.5)" }}>
+                <div className="fl-num" style={{ width: 20, color: "var(--muted)", fontSize: 15 }}>{i + 1}</div>
+                <div style={{ width: 30 }}><Avatar name={p.name} photo={p.photo} size={12} /></div>
+                <div className="fl-name" style={{ flex: 1, fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                <span className="fl-badge fl-badge-blue">{p.pts}</span>
+                <span className="fl-badge fl-badge-gold">{currentPrice(p, settings)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RowLine({ rank, title, sub, value }) {
+  const medalColor = rank === 1 ? "var(--gold)" : rank === 2 ? "#c7ccd6" : rank === 3 ? "#c98a4e" : "var(--muted)";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: "1px solid rgba(38,55,92,0.5)" }}>
+      <div className="fl-num" style={{ width: 22, fontSize: 16, color: medalColor }}>{rank}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="fl-name" style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+        <div className="fl-name" style={{ fontSize: 11.5, color: "var(--muted)" }}>{sub}</div>
+      </div>
+      <div className="fl-num" style={{ fontSize: 16, color: "var(--gold-light)" }}>{value}</div>
+    </div>
+  );
+}
+
+function EmptyState({ text, action }) {
+  return (
+    <div style={{ textAlign: "center", padding: "30px 10px", color: "var(--muted)" }}>
+      <AlertCircle size={22} style={{ marginBottom: 8, opacity: 0.6 }} />
+      <div style={{ fontSize: 13.5 }}>{text}</div>
+      {action}
+    </div>
+  );
+}
+
+/* ------------------------------ Players view -------------------------------- */
+function PlayersView({ players, settings }) {
+  const [q, setQ] = useState("");
+  const ranked = useMemo(() => {
+    return players.filter(p => p.status !== "empty" && p.name)
+      .map(p => ({ ...p, pts: totalPoints(p, settings.categories) }))
+      .sort((a, b) => b.pts - a.pts);
+  }, [players, settings]);
+
+  const filtered = ranked.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 18px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+        <div>
+          <div className="fl-eyebrow">Player Pool</div>
+          <h1 className="fl-display" style={{ fontSize: 30, margin: "2px 0" }}>All Players</h1>
+        </div>
+        <div style={{ position: "relative", width: 260 }}>
+          <Search size={15} style={{ position: "absolute", left: 12, top: 12, color: "var(--muted)" }} />
+          <input className="fl-input" style={{ paddingLeft: 34 }} placeholder="Search players..." value={q} onChange={e => setQ(e.target.value)} />
+        </div>
+      </div>
+
+      {filtered.length === 0 ? <EmptyState text="No players match your search." /> : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px,1fr))", gap: 12 }}>
+          {filtered.map((p, i) => (
+            <PlayerCard key={p.id} player={p} settings={settings} rank={ranked.indexOf(p) + 1 <= 3 ? ranked.indexOf(p) + 1 : null} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ Team builder -------------------------------- */
+function TeamBuilderView({ players, settings, teams, onSaveTeam }) {
+  const [stage, setStage] = useState("identify"); // identify | build
+  const [participantName, setParticipantName] = useState("");
+  const [teamName, setTeamName] = useState("");
+  const [selected, setSelected] = useState([]);
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState(null);
+  const [existingId, setExistingId] = useState(null);
+
+  const findExisting = () => teams.find(t => slugify(t.participantName) === slugify(participantName));
+
+  const startBuilding = () => {
+    if (!participantName.trim()) return;
+    const existing = findExisting();
+    if (existing) {
+      setTeamName(existing.teamName);
+      setSelected(existing.playerIds);
+      setExistingId(existing.id);
+    } else {
+      setTeamName("");
+      setSelected([]);
+      setExistingId(null);
+    }
+    setStatus(null);
+    setStage("build");
+  };
+
+  const togglePlayer = (id) => {
+    setSelected(sel => {
+      if (sel.includes(id)) return sel.filter(x => x !== id);
+      if (sel.length >= settings.teamSize) return sel;
+      return [...sel, id];
+    });
+  };
+
+  const activePlayers = players.filter(p => p.status !== "empty" && p.name);
+  const filtered = activePlayers.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
+  const selectedPlayers = selected.map(id => players.find(p => p.id === id)).filter(Boolean);
+  const teamPts = selectedPlayers.reduce((s, p) => s + totalPoints(p, settings.categories), 0);
+  const canSave = selected.length === settings.teamSize && teamName.trim().length > 0;
+
+  const handleSave = async () => {
+    const team = {
+      id: existingId || `${slugify(participantName)}-${Date.now()}`,
+      participantName: participantName.trim(),
+      teamName: teamName.trim(),
+      playerIds: selected,
+      createdAt: existingId ? undefined : new Date().toISOString(),
+    };
+    setStatus("saving");
+    const ok = await onSaveTeam(team, existingId);
+    setStatus(ok ? "saved" : "error");
+  };
+
+  if (stage === "identify") {
+    return (
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 18px" }}>
+        <div className="fl-card fl-rise" style={{ padding: 28, textAlign: "center" }}>
+          <div className="fl-crest" style={{ margin: "0 auto 14px" }}><UserCircle2 size={20} color="#241a02" /></div>
+          <h1 className="fl-display" style={{ fontSize: 26, marginBottom: 4 }}>Find or Start Your Team</h1>
+          <p style={{ color: "var(--muted)", fontSize: 13.5, marginBottom: 18 }}>Enter your name exactly as you'll use it all conference — this is how you'll find your team again later.</p>
+          <label className="fl-label" style={{ textAlign: "left" }}>Your Name</label>
+          <input className="fl-input" placeholder="e.g. Mina Samy" value={participantName} onChange={e => setParticipantName(e.target.value)} onKeyDown={e => e.key === "Enter" && startBuilding()} />
+          <button className="fl-btn fl-btn-gold" style={{ width: "100%", marginTop: 16 }} onClick={startBuilding} disabled={!participantName.trim()}>
+            Continue <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 18px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+        <div>
+          <div className="fl-eyebrow">{existingId ? "Editing Team" : "New Team"}</div>
+          <h1 className="fl-display" style={{ fontSize: 28, margin: "2px 0" }}>{participantName}'s Fantasy Team</h1>
+        </div>
+        <button className="fl-btn fl-btn-ghost fl-btn-sm" onClick={() => setStage("identify")}>Switch name</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16, alignItems: "start" }}>
+        <div className="fl-card" style={{ padding: 18 }}>
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <Search size={15} style={{ position: "absolute", left: 12, top: 12, color: "var(--muted)" }} />
+            <input className="fl-input" style={{ paddingLeft: 34 }} placeholder="Search players to add..." value={q} onChange={e => setQ(e.target.value)} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px,1fr))", gap: 10, maxHeight: 560, overflowY: "auto" }} className="fl-scrollbar">
+            {filtered.map(p => (
+              <PlayerCard key={p.id} player={p} settings={settings} selectable selected={selected.includes(p.id)} onClick={() => togglePlayer(p.id)} />
+            ))}
+            {filtered.length === 0 && <EmptyState text="No players match your search." />}
+          </div>
+        </div>
+
+        <div className="fl-card" style={{ padding: 18, position: "sticky", top: 90 }}>
+          <label className="fl-label">Team Name</label>
+          <input className="fl-input" placeholder="e.g. The Titans" value={teamName} onChange={e => setTeamName(e.target.value)} style={{ marginBottom: 16 }} />
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span className="fl-label" style={{ margin: 0 }}>Squad ({selected.length}/{settings.teamSize})</span>
+            <span className="fl-badge fl-badge-blue"><Star size={11} />{teamPts} pts</span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16, minHeight: 40 }}>
+            {selectedPlayers.length === 0 && <div style={{ fontSize: 12.5, color: "var(--muted-dim)" }}>Tap players on the left to add them.</div>}
+            {selectedPlayers.map(p => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--navy-700)", borderRadius: 8, padding: "6px 8px" }}>
+                <div style={{ width: 26 }}><Avatar name={p.name} photo={p.photo} size={11} /></div>
+                <div className="fl-name" style={{ flex: 1, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                <span style={{ fontSize: 11.5, color: "var(--gold-light)" }}>{totalPoints(p, settings.categories)}</span>
+                <X size={14} style={{ cursor: "pointer", color: "var(--muted)" }} onClick={() => togglePlayer(p.id)} />
+              </div>
+            ))}
+          </div>
+
+          <button className="fl-btn fl-btn-gold" style={{ width: "100%" }} disabled={!canSave || status === "saving"} onClick={handleSave}>
+            {status === "saving" ? <Loader2 size={15} className="fl-spin" /> : <Save size={15} />}
+            {existingId ? "Update Team" : "Save Team"}
+          </button>
+          {status === "saved" && <div style={{ color: "var(--green)", fontSize: 12.5, marginTop: 8, textAlign: "center" }}>Team saved ✓</div>}
+          {status === "error" && <div style={{ color: "var(--red)", fontSize: 12.5, marginTop: 8, textAlign: "center" }}>Couldn't save — try again.</div>}
+          {!canSave && <div style={{ fontSize: 11.5, color: "var(--muted-dim)", marginTop: 8, textAlign: "center" }}>Pick exactly {settings.teamSize} players and name your team to save.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------ Leaderboard ---------------------------------- */
+function LeaderboardView({ players, teams, settings }) {
+  const [tab, setTab] = useState("teams");
+
+  const rankedTeams = useMemo(() => teams.map(t => ({
+    ...t,
+    pts: t.playerIds.reduce((s, id) => {
+      const pl = players.find(p => p.id === id);
+      return s + (pl ? totalPoints(pl, settings.categories) : 0);
+    }, 0),
+  })).sort((a, b) => b.pts - a.pts), [teams, players, settings]);
+
+  const rankedPlayers = useMemo(() => players.filter(p => p.status !== "empty" && p.name)
+    .map(p => ({ ...p, pts: totalPoints(p, settings.categories), price: currentPrice(p, settings) }))
+    .sort((a, b) => b.pts - a.pts), [players, settings]);
+
+  return (
+    <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 18px" }}>
+      <div className="fl-eyebrow">Rankings</div>
+      <h1 className="fl-display" style={{ fontSize: 32, margin: "2px 0 16px" }}>Leaderboard</h1>
+
+      <div className="fl-tabbar" style={{ marginBottom: 16 }}>
+        <div className={`fl-tab ${tab === "teams" ? "active" : ""}`} onClick={() => setTab("teams")}>Fantasy Teams</div>
+        <div className={`fl-tab ${tab === "players" ? "active" : ""}`} onClick={() => setTab("players")}>Players</div>
+      </div>
+
+      <div className="fl-card" style={{ padding: 10 }}>
+        {tab === "teams" ? (
+          rankedTeams.length === 0 ? <EmptyState text="No fantasy teams have been created yet." /> : (
+            <table className="fl-table">
+              <thead><tr><th>#</th><th>Team</th><th>Participant</th><th style={{ textAlign: "right" }}>Points</th></tr></thead>
+              <tbody>
+                {rankedTeams.map((t, i) => (
+                  <tr key={t.id}>
+                    <td>
+                      {i < 3 ? <Medal size={15} color={i === 0 ? "var(--gold)" : i === 1 ? "#c7ccd6" : "#c98a4e"} /> : <span className="fl-num">{i + 1}</span>}
+                    </td>
+                    <td className="fl-name" style={{ fontWeight: 700 }}>{t.teamName}</td>
+                    <td className="fl-name" style={{ color: "var(--muted)" }}>{t.participantName}</td>
+                    <td style={{ textAlign: "right" }} className="fl-num"><span className="fl-badge fl-badge-gold">{t.pts}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        ) : (
+          rankedPlayers.length === 0 ? <EmptyState text="No player points recorded yet." /> : (
+            <table className="fl-table">
+              <thead><tr><th>#</th><th></th><th>Player</th><th style={{ textAlign: "right" }}>Points</th><th style={{ textAlign: "right" }}>Price</th></tr></thead>
+              <tbody>
+                {rankedPlayers.map((p, i) => (
+                  <tr key={p.id}>
+                    <td>{i < 3 ? <Medal size={15} color={i === 0 ? "var(--gold)" : i === 1 ? "#c7ccd6" : "#c98a4e"} /> : <span className="fl-num">{i + 1}</span>}</td>
+                    <td style={{ width: 34 }}><Avatar name={p.name} photo={p.photo} size={11} /></td>
+                    <td className="fl-name" style={{ fontWeight: 700 }}>{p.name}</td>
+                    <td style={{ textAlign: "right" }}><span className="fl-badge fl-badge-blue">{p.pts}</span></td>
+                    <td style={{ textAlign: "right" }}><span className="fl-badge fl-badge-gold">{p.price}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------ Admin ---------------------------------- */
+function AdminGate({ settings, onUnlock }) {
+  const [pin, setPin] = useState("");
+  const [err, setErr] = useState(false);
+  const submit = () => {
+    if (pin === settings.adminPin) onUnlock();
+    else { setErr(true); setTimeout(() => setErr(false), 1200); }
+  };
+  return (
+    <div style={{ maxWidth: 380, margin: "0 auto", padding: "70px 18px" }}>
+      <div className="fl-card fl-rise" style={{ padding: 26, textAlign: "center" }}>
+        <div className="fl-crest" style={{ margin: "0 auto 14px" }}><Lock size={18} color="#241a02" /></div>
+        <h1 className="fl-display" style={{ fontSize: 24, marginBottom: 4 }}>Admin Access</h1>
+        <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 16 }}>Enter the admin PIN to manage players, scoring and settings.</p>
+        <input className="fl-input" type="password" placeholder="PIN" value={pin} onChange={e => setPin(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()} style={{ borderColor: err ? "var(--red)" : undefined, textAlign: "center", letterSpacing: 4 }} />
+        <button className="fl-btn fl-btn-gold" style={{ width: "100%", marginTop: 14 }} onClick={submit}>Unlock</button>
+        {err && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 8 }}>Incorrect PIN.</div>}
+      </div>
+    </div>
+  );
+}
+
+function AdminView({ players, setPlayers, settings, setSettings, teams, setTeams, persist }) {
+  const [unlocked, setUnlocked] = useState(false);
+  const [tab, setTab] = useState("players");
+
+  if (!unlocked) return <AdminGate settings={settings} onUnlock={() => setUnlocked(true)} />;
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 18px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+        <div>
+          <div className="fl-eyebrow">Admin</div>
+          <h1 className="fl-display" style={{ fontSize: 30, margin: "2px 0" }}>Manage the League</h1>
+        </div>
+        <span className="fl-badge fl-badge-green"><Shield size={12} />Unlocked</span>
+      </div>
+
+      <div className="fl-tabbar" style={{ marginBottom: 18 }}>
+        <div className={`fl-tab ${tab === "players" ? "active" : ""}`} onClick={() => setTab("players")}>Players & Scoring</div>
+        <div className={`fl-tab ${tab === "teams" ? "active" : ""}`} onClick={() => setTab("teams")}>Fantasy Teams</div>
+        <div className={`fl-tab ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>Settings</div>
+      </div>
+
+      {tab === "players" && <AdminPlayersTab players={players} setPlayers={setPlayers} settings={settings} persist={persist} />}
+      {tab === "teams" && <AdminTeamsTab players={players} teams={teams} setTeams={setTeams} settings={settings} persist={persist} />}
+      {tab === "settings" && <AdminSettingsTab settings={settings} setSettings={setSettings} players={players} setPlayers={setPlayers} persist={persist} />}
+    </div>
+  );
+}
+
+function AdminPlayersTab({ players, setPlayers, settings, persist }) {
+  const [draft, setDraft] = useState(players);
+  const [dirty, setDirty] = useState(false);
+  const [q, setQ] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => { setDraft(players); setDirty(false); }, [players]);
+
+  const update = (id, field, value) => {
+    setDraft(d => d.map(p => p.id === id ? { ...p, [field]: value } : p));
+    setDirty(true);
+  };
+  const updatePoint = (id, key, value) => {
+    setDraft(d => d.map(p => p.id === id ? { ...p, points: { ...p.points, [key]: Number(value) || 0 }, status: p.name ? "active" : p.status } : p));
+    setDirty(true);
+  };
+  const updateName = (id, name) => {
+    setDraft(d => d.map(p => p.id === id ? { ...p, name, status: name.trim() ? "active" : "empty" } : p));
+    setDirty(true);
+  };
+
+  const save = async () => {
+    setPlayers(draft);
+    await persist.savePlayers(draft);
+    setDirty(false);
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1500);
+  };
+
+  const filtered = draft.filter(p => (p.name || `slot ${p.id}`).toLowerCase().includes(q.toLowerCase()));
+
+  return (
+    <div className="fl-card" style={{ padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", width: 240 }}>
+          <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: "var(--muted)" }} />
+          <input className="fl-input" style={{ paddingLeft: 30 }} placeholder="Search / jump to slot..." value={q} onChange={e => setQ(e.target.value)} />
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {savedFlash && <span style={{ color: "var(--green)", fontSize: 12.5 }}>Saved ✓</span>}
+          <button className="fl-btn fl-btn-gold fl-btn-sm" disabled={!dirty} onClick={save}><Save size={13} />Save Changes</button>
+        </div>
+      </div>
+      <div style={{ maxHeight: 640, overflow: "auto" }} className="fl-scrollbar">
+        <table className="fl-table" style={{ minWidth: 780 }}>
+          <thead>
+            <tr>
+              <th>ID</th><th>Name</th>
+              {settings.categories.map(c => <th key={c.key}>{c.label}</th>)}
+              <th>Total</th><th>Price</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(p => {
+              const pts = totalPoints(p, settings.categories);
+              const price = currentPrice(p, settings);
+              return (
+                <tr key={p.id}>
+                  <td className="fl-num" style={{ color: "var(--muted)" }}>{p.id}</td>
+                  <td><input className="fl-input" style={{ padding: "6px 8px", minWidth: 150 }} value={p.name} placeholder={`Slot ${p.id} — empty`} onChange={e => updateName(p.id, e.target.value)} /></td>
+                  {settings.categories.map(c => (
+                    <td key={c.key}>
+                      <input type="number" className="fl-input" style={{ padding: "6px 8px", width: 68 }} value={p.points?.[c.key] ?? 0} onChange={e => updatePoint(p.id, c.key, e.target.value)} />
+                    </td>
+                  ))}
+                  <td><span className="fl-badge fl-badge-blue">{pts}</span></td>
+                  <td><span className="fl-badge fl-badge-gold">{price}</span></td>
+                  <td>
+                    <span className={`fl-badge ${p.status === "empty" ? "fl-badge-muted" : "fl-badge-green"}`}>{p.status === "empty" ? "Empty" : "Active"}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdminTeamsTab({ players, teams, setTeams, settings, persist }) {
+  const removeTeam = async (id) => {
+    const next = teams.filter(t => t.id !== id);
+    setTeams(next);
+    await persist.saveTeams(next);
+  };
+  const ranked = [...teams].map(t => ({
+    ...t,
+    pts: t.playerIds.reduce((s, id) => {
+      const pl = players.find(p => p.id === id);
+      return s + (pl ? totalPoints(pl, settings.categories) : 0);
+    }, 0),
+  })).sort((a, b) => b.pts - a.pts);
+
+  return (
+    <div className="fl-card" style={{ padding: 16 }}>
+      <div style={{ marginBottom: 10, color: "var(--muted)", fontSize: 13 }}>{teams.length} team(s) submitted.</div>
+      {ranked.length === 0 ? <EmptyState text="No teams submitted yet." /> : (
+        <div style={{ maxHeight: 620, overflow: "auto" }} className="fl-scrollbar">
+          <table className="fl-table" style={{ minWidth: 640 }}>
+            <thead><tr><th>#</th><th>Team</th><th>Participant</th><th>Squad</th><th>Points</th><th></th></tr></thead>
+            <tbody>
+              {ranked.map((t, i) => (
+                <tr key={t.id}>
+                  <td className="fl-num">{i + 1}</td>
+                  <td className="fl-name" style={{ fontWeight: 700 }}>{t.teamName}</td>
+                  <td className="fl-name" style={{ color: "var(--muted)" }}>{t.participantName}</td>
+                  <td style={{ fontSize: 12, color: "var(--muted)" }} className="fl-name">
+                    {t.playerIds.map(id => players.find(p => p.id === id)?.name).filter(Boolean).join(", ")}
+                  </td>
+                  <td><span className="fl-badge fl-badge-gold">{t.pts}</span></td>
+                  <td><Trash2 size={15} style={{ cursor: "pointer", color: "var(--red)" }} onClick={() => removeTeam(t.id)} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminSettingsTab({ settings, setSettings, players, setPlayers, persist }) {
+  const [draft, setDraft] = useState(settings);
+  const [dirty, setDirty] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => { setDraft(settings); setDirty(false); }, [settings]);
+
+  const set = (field, value) => { setDraft(d => ({ ...d, [field]: value })); setDirty(true); };
+
+  const updateCategory = (idx, field, value) => {
+    setDraft(d => {
+      const cats = [...d.categories];
+      cats[idx] = { ...cats[idx], [field]: value };
+      return { ...d, categories: cats };
+    });
+    setDirty(true);
+  };
+  const addCategory = () => {
+    setDraft(d => ({ ...d, categories: [...d.categories, { key: `cat_${Date.now()}`, label: "New Category" }] }));
+    setDirty(true);
+  };
+  const removeCategory = (idx) => {
+    setDraft(d => ({ ...d, categories: d.categories.filter((_, i) => i !== idx) }));
+    setDirty(true);
+  };
+
+  const save = async () => {
+    setSettings(draft);
+    await persist.saveSettings(draft);
+    // ensure every player has a points entry for every category
+    const patched = players.map(p => {
+      const points = {};
+      draft.categories.forEach(c => { points[c.key] = p.points?.[c.key] ?? 0; });
+      return { ...p, points };
+    });
+    setPlayers(patched);
+    await persist.savePlayers(patched);
+    setDirty(false);
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1500);
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="fl-card" style={{ padding: 18 }}>
+        <div className="fl-display" style={{ fontSize: 18, marginBottom: 14 }}>League Details</div>
+        <label className="fl-label">Conference Name</label>
+        <input className="fl-input" style={{ marginBottom: 12 }} value={draft.conferenceName} onChange={e => set("conferenceName", e.target.value)} />
+        <label className="fl-label">League Name</label>
+        <input className="fl-input" style={{ marginBottom: 12 }} value={draft.leagueName} onChange={e => set("leagueName", e.target.value)} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <label className="fl-label">Target Player Slots</label>
+            <input type="number" className="fl-input" value={draft.targetPlayers} onChange={e => set("targetPlayers", Number(e.target.value) || 0)} />
+          </div>
+          <div>
+            <label className="fl-label">Players per Team</label>
+            <input type="number" className="fl-input" value={draft.teamSize} onChange={e => set("teamSize", Number(e.target.value) || 0)} />
+          </div>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <label className="fl-label">Admin PIN</label>
+          <input className="fl-input" value={draft.adminPin} onChange={e => set("adminPin", e.target.value)} />
+          <div style={{ fontSize: 11.5, color: "var(--muted-dim)", marginTop: 4 }}>Simple gate for casual protection — not secure authentication.</div>
+        </div>
+      </div>
+
+      <div className="fl-card" style={{ padding: 18 }}>
+        <div className="fl-display" style={{ fontSize: 18, marginBottom: 14 }}>Pricing Rule</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <div>
+            <label className="fl-label">Initial Price</label>
+            <input type="number" className="fl-input" value={draft.initialPrice} onChange={e => set("initialPrice", Number(e.target.value) || 0)} />
+          </div>
+          <div>
+            <label className="fl-label">Points per Step</label>
+            <input type="number" className="fl-input" value={draft.pricingStep} onChange={e => set("pricingStep", Number(e.target.value) || 1)} />
+          </div>
+        </div>
+        <label className="fl-label">Price Increase per Step</label>
+        <input type="number" className="fl-input" value={draft.pricingIncrement} onChange={e => set("pricingIncrement", Number(e.target.value) || 0)} />
+        <div style={{ marginTop: 10, fontSize: 12, color: "var(--muted)", background: "var(--navy-900)", border: "1px solid var(--line)", borderRadius: 8, padding: 10 }}>
+          Price = Initial Price + floor(Total Points ÷ {draft.pricingStep || 1}) × {draft.pricingIncrement}
+        </div>
+      </div>
+
+      <div className="fl-card" style={{ padding: 18, gridColumn: "1 / -1" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div className="fl-display" style={{ fontSize: 18 }}>Scoring Categories</div>
+          <button className="fl-btn fl-btn-ghost fl-btn-sm" onClick={addCategory}><Plus size={13} />Add Category</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {draft.categories.map((c, idx) => (
+            <div key={c.key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input className="fl-input" style={{ flex: 1 }} value={c.label} onChange={e => updateCategory(idx, "label", e.target.value)} />
+              <Trash2 size={16} style={{ cursor: "pointer", color: "var(--red)" }} onClick={() => removeCategory(idx)} />
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--muted-dim)", marginTop: 10 }}>Total Points = sum of all category values (use negative numbers for penalties). Changing categories keeps existing player values where the category name matches.</div>
+      </div>
+
+      <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+        {savedFlash && <span style={{ color: "var(--green)", fontSize: 12.5 }}>Saved ✓</span>}
+        <button className="fl-btn fl-btn-gold" disabled={!dirty} onClick={save}><Save size={15} />Save Settings</button>
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------- App ----------------------------------- */
+export default function App() {
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("dashboard");
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [players, setPlayers] = useState([]);
+  const [teams, setTeams] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      let s = await storageGet("settings", null);
+      const firstRun = !s;
+      if (!s) s = DEFAULT_SETTINGS;
+      const defaultPlayers = buildDefaultPlayers(s);
+      let p = await storageGet("players", null);
+      if (!p) p = defaultPlayers;
+      const t = await storageGet("teams", []);
+      if (!mounted) return;
+      setSettings(s);
+      setPlayers(p);
+      setTeams(t);
+      setLoading(false);
+      // seed shared storage on the very first load so every participant converges on the same data
+      if (firstRun) {
+        storageSet("settings", s);
+        storageSet("players", p);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const persist = {
+    savePlayers: (p) => storageSet("players", p),
+    saveSettings: (s) => storageSet("settings", s),
+    saveTeams: (t) => storageSet("teams", t),
+  };
+
+  const handleSaveTeam = useCallback(async (team, existingId) => {
+    let next;
+    if (existingId) {
+      next = teams.map(t => t.id === existingId ? { ...t, ...team } : t);
+    } else {
+      next = [...teams, team];
+    }
+    setTeams(next);
+    return persist.saveTeams(next);
+  }, [teams]);
+
+  if (loading) {
+    return (
+      <div className="fl-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
+        <style>{STYLE}</style>
+        <div style={{ textAlign: "center", color: "var(--muted)" }}>
+          <Loader2 size={22} className="fl-spin" />
+          <div style={{ marginTop: 8, fontSize: 13 }}>Loading the league...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fl-root">
+      <style>{STYLE}</style>
+      <NavBar view={view} setView={setView} settings={settings} />
+      {view === "dashboard" && <DashboardView players={players} teams={teams} settings={settings} setView={setView} />}
+      {view === "players" && <PlayersView players={players} settings={settings} />}
+      {view === "team" && <TeamBuilderView players={players} settings={settings} teams={teams} onSaveTeam={handleSaveTeam} />}
+      {view === "leaderboard" && <LeaderboardView players={players} teams={teams} settings={settings} />}
+      {view === "admin" && (
+        <AdminView
+          players={players} setPlayers={setPlayers}
+          settings={settings} setSettings={setSettings}
+          teams={teams} setTeams={setTeams}
+          persist={persist}
+        />
+      )}
+    </div>
+  );
+}
